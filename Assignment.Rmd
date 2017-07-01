@@ -1,0 +1,141 @@
+---
+title: "Practical ML Course Project"
+author: "David S"
+date: "30/06/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Practical Machine Learning Project
+
+## Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+## Data
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+## Importing data and loading packages
+```{r cars}
+library(caret)
+
+dt <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+test <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+#names(dt)
+dim(dt)
+dim(test)
+#head(dt)
+
+
+
+```
+
+## Data cleaning
+We remove columns with NA values in the test data set and also X and timestamps variables.
+Then we check the remaining variables and their type.
+```{r}
+# remove columns with NA, use test data as referal for NA
+cols.without.na = colSums(is.na(test)) == 0
+dt = dt[, cols.without.na]
+test = test[, cols.without.na]
+
+dt["X"]<- NULL
+dt["raw_timestamp_part_1"]<- NULL
+dt["raw_timestamp_part_2"]<- NULL
+dt["cvtd_timestamp"]<- NULL
+
+
+test["X"]<- NULL
+test["raw_timestamp_part_1"]<- NULL
+test["raw_timestamp_part_2"]<- NULL
+test["cvtd_timestamp"]<- NULL
+
+str(dt, list.len=ncol(dt))
+```
+
+
+## Splitting data set
+
+We choose to split the data set 75% for training step and 25% for validating the models.
+```{r pressure, echo=FALSE}
+inTrain = createDataPartition(dt$classe, p = 3/4)[[1]]
+train = dt[ inTrain,]
+valid = dt[-inTrain,]
+
+```
+
+
+## Model 1
+
+We fit a CART tree : 52% accuracy.
+```{r}
+#gbm_output <- gbm::gbm(classe ~ . , distribution = "multinomial", data = train, var.monotone = NULL, n.trees = 300, interaction.depth = 2, shrinkage = 0.005, bag.fraction = 0.8, train.fraction = 0.8, verbose = TRUE)
+
+treeFit <- train(classe~ .,data=train,method="rpart")
+pred_1 <- predict(treeFit, valid)
+confusionMatrix(pred_1, valid$classe)
+
+```
+
+##Model 2
+
+We fit a Random Forest : 99,7% accuracy. It seems we have a winner !
+```{r}
+library(randomForest)
+modFit_rf <- randomForest(classe ~ ., data = train)
+
+pred_2 <- predict(modFit_rf, valid)
+confusionMatrix(pred_2, valid$classe)
+
+```
+
+##Model 3
+
+We try Linear Discriminant Analysis: 75% accuracy
+```{r}
+modFit_lda <- train(classe ~ ., data = train, method="lda")
+
+pred_3 <- predict(modFit_lda, valid)
+confusionMatrix(pred_3, valid$classe)
+
+```
+
+## Model selection
+
+Performance with RF is so good that we choose to not try other models neither ensembling methods.
+Nevertheless, we decide to compare the predictions on the test set with this first Random Forest.
+Then we decide to train a second RF model on the total train data set (before splitting in 75%/25%) and make a second prediction on the test set.
+We compare them and observe that they are identical.
+
+###Submission
+```{r}
+common <- intersect(names(train), names(test)) 
+for (p in common) { 
+  if (class(train[[p]]) == "factor") { 
+    levels(test[[p]]) <- levels(train[[p]]) 
+  } 
+}
+
+
+pred_test1 <- predict(modFit_rf, test)
+
+modFit_rf_final <- randomForest(classe ~ ., data = dt)
+pred_test2 <- predict(modFit_rf_final, test)
+
+print(pred_test1)
+print(pred_test2)
+```
+
+
